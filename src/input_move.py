@@ -279,7 +279,7 @@ class MoveGroupPythonInterface(object):
         self.arm.go(wait=True)
         
 
-    def hand_shake(self, shakes=3):
+    def hand_shake(self):
         """
         Perform a waving gesture by moving the arm back and forth.
         """
@@ -297,7 +297,7 @@ class MoveGroupPythonInterface(object):
         self.move_gripper(position=[0.04, 0.04])
         # Define the wave movement: back and forth
         # Perform the waving motion a specified number of times
-        for i in range(shakes):
+        for i in range(3):
             # Raise the arm to start the wave
             self.arm.set_joint_value_target(shake_up)
             self.arm.go(wait=True)
@@ -311,13 +311,30 @@ class MoveGroupPythonInterface(object):
         self.arm.go(wait=True)
 
 
-    def head_move(self, position=[0, 0]):
+    def head_move_position_call(self, position=[0, 0]):
         trajectory = JointTrajectory()
         trajectory.joint_names = ["head_1_joint", "head_2_joint"]
 
         head_pub = rospy.Publisher("/head_controller/command", JointTrajectory, queue_size=10)
         point = JointTrajectoryPoint()
         point.positions = [position[0], position[1]]
+        point.time_from_start = rospy.Duration(2.0)
+
+        trajectory.points.append(point)
+
+        rate = rospy.Rate(1)
+
+        for _ in range(5):
+            head_pub.publish(trajectory)
+            rate.sleep()
+
+    def head_move(self):
+        trajectory = JointTrajectory()
+        trajectory.joint_names = ["head_1_joint", "head_2_joint"]
+
+        head_pub = rospy.Publisher("/head_controller/command", JointTrajectory, queue_size=10)
+        point = JointTrajectoryPoint()
+        point.positions = [0, -0.5]
         point.time_from_start = rospy.Duration(2.0)
 
         trajectory.points.append(point)
@@ -403,7 +420,7 @@ class MoveGroupPythonInterface(object):
 
             self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
         
-        elif object == "tool box":
+        elif object == "toolbox":
             position = [0.04, 0.04]
             self.move_gripper(position)
 
@@ -429,7 +446,6 @@ class MoveGroupPythonInterface(object):
             self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
         
 
-        
         if object != "cup":
             start_position = [0.3495973101884432, 0.6028146036908067, 1.0207660847689026, 0.038411388424427435, 1.769645808341898, -1.3717273219062864, 0.632098367458853, -0.39945199084057714]
             self.go_to_joint_state(start_position, group="arm_torso")
@@ -446,6 +462,7 @@ class MoveGroupPythonInterface(object):
             self.go_to_joint_state(start_position, group="arm_torso")
         
             rospy.sleep(1.0)
+
 
         position = [0.04, 0.04]
         self.move_gripper(position)
@@ -501,12 +518,13 @@ def main():
         #transform = move_node.tf_buffer.lookup_transform("base_link", "gripper_grasping_frame", rospy.Time(0))
         #result = move_node.frame_exists("gripper_grasping_frame")
         #print(result)
-        move_node.grasp(object="tool box")
-        move_node.grasp(object="measurement tape")
-        move_node.grasp(object="cup")
+        #move_node.grasp(object="tool box")
+        #move_node.grasp(object="measurement tape")
+        #move_node.grasp(object="cup")
         #move_node.go_home()
+        #move_node.head_move()
         # Example usage
-        """while True:
+        while True:
             user_input = input("User: ")
             
             result = call_server(user_input)
@@ -531,20 +549,34 @@ def main():
 
             # Ensure 'function' key exists and contains a callable function in the list
             function_call = result["function"]
-            print(function_call)
+            print("This is the output of the function call  : ", function_call)
             if function_call:
                 # Get the method name from the response (e.g., 'hand_wave()')
-                method_name = function_call[0].strip('()')  # Remove the parentheses
+
+                method_name = function_call[0][0:function_call[0].find('(')]
+
+                print("THIS IS THE METHOD NAME : ", method_name)
+
+                sep = "'"
+                temp = function_call[0]
+                
+                if method_name == "grasp": 
+                    arg = temp[temp.find(sep)+len(sep):temp.rfind(sep)]
+                    print("THIS IS ARG : ", arg)
 
                 # Use hasattr to check if the method exists in the move_node object
                 if hasattr(move_node, method_name):  # Check if the method exists
                     method = getattr(move_node, method_name)  # Get the method dynamically
-                    method()  # Call the method
+                    if method_name == "grasp": 
+                        method(arg)  # Call the method
+                    else: 
+                        method()
+
                 else:
                     print(f"Method '{method_name}' not found in MoveNode class.")
             else:
                 print("No function to execute.")
-        """
+        
         #move_node.grasp_on_table()
         #position = [0.04, 0.04]
         #move_node.move_gripper(position)
