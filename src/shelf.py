@@ -215,38 +215,6 @@ class MoveGroupPythonInterface(object):
         return all_close(joint_goal, current_joints, 0.01), success
 
 
-    def continuous_cartesian_motion(self, waves=1):
-        """
-        Make the robot arm perform continuous Cartesian movement through multiple poses.
-        """
-        wave_up = [0.07000998941539205, -0.8258644817377165, -3.2050192517142464, 2.244894700026078, -0.05274449211889464, -0.05541413782115412, 0.19723327627220383]
-        self.go_to_joint_state(wave_up, "arm_torso")
-        # Get the current pose of the end effector
-        start_pose = self.arm.get_current_pose().pose
-        print(start_pose)
-        # Define a series of poses to move through
-
-        euler = tf_conversions.transformations.euler_from_quaternion([start_pose.orientation.x, start_pose.orientation.y, start_pose.orientation.z, start_pose.orientation.w])
-        quat = tf_conversions.transformations.quaternion_from_euler(euler[0], euler[1], euler[2])
-
-        poses = [
-            Pose(position=start_pose.position, orientation=start_pose.orientation),  # Current position
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y       , start_pose.position.z - 0.06), orientation=start_pose.orientation),
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y - 0.07, start_pose.position.z - 0.06), orientation=start_pose.orientation),
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y - 0.17, start_pose.position.z - 0.07), orientation=start_pose.orientation),
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y - 0.05, start_pose.position.z - 0.06), orientation=start_pose.orientation),
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y - 0.17, start_pose.position.z - 0.07), orientation=start_pose.orientation),
-            Pose(position=Point(start_pose.position.x + 0.04, start_pose.position.y - 0.05, start_pose.position.z - 0.06), orientation=start_pose.orientation),
-        ]
-        for i in range(waves):
-            # Plan and execute the Cartesian path through the poses
-            (plan, fraction) = self.arm.compute_cartesian_path(poses, 0.05, 0.0)  # 0.01 is the step size
-            if fraction == 1.0:
-                self.arm.execute(plan, wait=True)
-            else:
-                rospy.logwarn("Cartesian path planning failed to complete.")
-
-
     def hand_wave(self, num_waves=3):
         """
         Perform a waving gesture by moving the arm back and forth.
@@ -356,131 +324,98 @@ class MoveGroupPythonInterface(object):
             head_pub.publish(trajectory_up)
             rate.sleep()
 
-    def grasp(self, object="cup"):
+    def grasp(self, object="cup", shelf_position = "left"):
 
-        start_position = [0.349675502384862, 1.3545978800104312, 1.0208427848256607, 0.1870407584101612, 1.8024274126002853, -1.416253529267913, 0.8398546052777839, 0.23353193570618702]
-        self.go_to_joint_state(start_position, group="arm_torso")
-        
-        rospy.sleep(1.0)
+        if shelf_position == "left":
 
-        start_position = [0.3495973101884432, 0.6028146036908067, 1.0207660847689026, 0.038411388424427435, 1.769645808341898, -1.3717273219062864, 0.632098367458853, -0.39945199084057714]
-        self.go_to_joint_state(start_position, group="arm_torso")
-        
-        rospy.sleep(1.0)
-        
-        end_effector = self.arm.get_current_pose().pose
-        print(end_effector)
-        end_effector_frame = "gripper_grasping_frame"
-        if end_effector is not None:
-            # Access the translation values
-            x = end_effector.position.x
-            y = end_effector.position.y
-            z = end_effector.position.z
-            # Access the quaternion values for orientation
-            qx = end_effector.orientation.x
-            qy = end_effector.orientation.y
-            qz = end_effector.orientation.z
-            qw = end_effector.orientation.w
-            euler = tf_conversions.transformations.euler_from_quaternion([qx, qy, qz, qw])
+            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
+                start_position = [
+                    0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
+                    -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
+                    -0.9942679501715539, 0.16379137858206794
+                ]
+            else:
+                start_position = [
+                    0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
+                    -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
+                    0.255152175362931, 0.2361737918973196]
 
-            rospy.loginfo("Euler values based on transform: {}".format(euler))
+        elif shelf_position == "center":
+            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
+                start_position = [
+                    0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
+                    -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
+                    -0.9942679501715539, 0.16379137858206794
+                ]
+                
+            else:
+                start_position = [
+                    0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
+                    -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
+                    0.255152175362931, 0.2361737918973196]
 
-        if object == "cup":
-
-            position = [0.04, 0.04]
-            self.move_gripper(position)
-
-            start_pos = [-0.13, 0.0, 0.13, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-            position = [0.02, 0.02]
-            self.move_gripper(position)
-
-            start_pos = [-0.17, 0.0, -0.12, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-
-        elif object == "measurement tape":
-            position = [0.04, 0.04]
-            self.move_gripper(position)
-
-            start_pos = [-0.13, 0.14, 0, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-            start_pos = [-0.05, 0, 0.09, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-            position = [0.01, 0.01]
-            self.move_gripper(position)
-
-            start_pos = [-0.17, 0, -0.1, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-        
-        elif object == "toolbox":
-            position = [0.04, 0.04]
-            self.move_gripper(position)
-
-            start_pos = [-0.13, -0.15, 0, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-            start_pos = [-0.06, 0, 0.11, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-
-            position = [0.01, 0.01]
-            self.move_gripper(position)
-
-            start_pos = [-0.17, 0, -0.1, np.deg2rad(-90), np.deg2rad(0), np.deg2rad(0)]
-
-            initial_pos = start_pos
-
-            self.plan_cartesian_path(end_effector_frame, pos=initial_pos)
-        
-
-        if object != "cup":
-            start_position = [0.3495973101884432, 0.6028146036908067, 1.0207660847689026, 0.038411388424427435, 1.769645808341898, -1.3717273219062864, 0.632098367458853, -0.39945199084057714]
-            self.go_to_joint_state(start_position, group="arm_torso")
-        
-            rospy.sleep(1.0)
-            self.go_home(gripper_position=[0.02,0.02])
-
-            start_position = [0.149480021893815, 1.2404068355090583, -0.39097515991961834, -2.0907054871220603, 1.5351430548098606, -0.15168997280333177, 0.3028130395796744, -0.3437858947852056]
-            self.go_to_joint_state(start_position, group="arm_torso")
-
-            rospy.sleep(1)
         else:
-            start_position = [0.3495973101884432, 1.8059010139747502, 1.0209194848824188, 0.0673733298562641, 1.1372691803831936, -1.5231505154027998, 1.3938144253499627, -0.02399531654105813]
-            self.go_to_joint_state(start_position, group="arm_torso")
+            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
+                start_position = [
+                    0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
+                    -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
+                    -0.9942679501715539, 0.16379137858206794
+                ]
+            else:
+                start_position = [
+                    0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
+                    -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
+                    0.255152175362931, 0.2361737918973196]
+
         
-            rospy.sleep(1.0)
-
-
-        position = [0.04, 0.04]
-        self.move_gripper(position)
-
+        self.go_to_joint_state(start_position, group="arm_torso")
+        rospy.sleep(1.0)
+        
+        end_effector_frame = "gripper_grasping_frame"
+        movement_sequence = {
+            "measurement tape": [
+                ([-0.13 + 0.3, 0.0, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
+            ],
+            "toolbox": [
+                ([-0.13 + 0.3, 0.12, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
+            ],
+            "screwdriver": [
+                ([-0.13 + 0.3, -0.12, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.05, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
+            ],
+            "water bottle": [
+                ([-0.13 + 0.25, 0.0, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.05, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
+            ],
+            "lego brick": [
+                ([-0.13 + 0.25, -0.15, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.07, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
+            ]
+        }
+        
+        if object in movement_sequence:
+            for pos, gripper_pos in movement_sequence[object]:
+                if gripper_pos:
+                    self.move_gripper(gripper_pos)
+                self.plan_cartesian_path(end_effector_frame, pos=pos)
+        
+        self.go_to_joint_state(start_position, group="arm_torso")
         rospy.sleep(1)
+        end_position = [
+            0.03596841035264681, 0.8192928438847045, 0.9626734617803616,
+             -1.3650002301001702, 0.7747080120879289, 0.5567832344026737,
+             -0.5265056357128566, 0.24185211533758702]
 
-        self.go_home()
+        self.go_to_joint_state(end_position, group="arm_torso")
+
+        self.move_gripper([0.04, 0.04])
 
 
     def frame_exists(self, frame_id):
@@ -529,13 +464,12 @@ def main():
         #transform = move_node.tf_buffer.lookup_transform("base_link", "gripper_grasping_frame", rospy.Time(0))
         #result = move_node.frame_exists("gripper_grasping_frame")
         #print(result)
-        #move_node.grasp(object="tool box")
-        #move_node.grasp(object="measurement tape")
-        #move_node.grasp(object="cup")
-        #move_node.go_home()
+
+        move_node.grasp(object="lego brick")
+        #move_node.grasp(object="toolbox")
         #move_node.head_move()
         # Example usage
-        while True:
+        """while True:
             user_input = input("User: ")
             
             result = call_server(user_input)
@@ -587,7 +521,7 @@ def main():
                     print(f"Method '{method_name}' not found in MoveNode class.")
             else:
                 print("No function to execute.")
-        
+        """
         #move_node.grasp_on_table()
         #position = [0.04, 0.04]
         #move_node.move_gripper(position)
