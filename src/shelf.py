@@ -23,6 +23,12 @@ import json
 import ast
 from actionlib import SimpleActionClient
 from pal_interaction_msgs.msg import TtsAction, TtsGoal
+import argparse
+import queue
+import sys
+import sounddevice as sd
+from vosk import Model, KaldiRecognizer
+
 
 
 
@@ -327,8 +333,7 @@ class MoveGroupPythonInterface(object):
     def grasp(self, object="cup", shelf_position = "left"):
 
         if shelf_position == "left":
-
-            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
+            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
                 start_position = [
                     0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
                     -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
@@ -339,34 +344,41 @@ class MoveGroupPythonInterface(object):
                     0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
                     -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
                     0.255152175362931, 0.2361737918973196]
+
+            end_position = [0.03596841035264681, 0.8192928438847045, 0.9626734617803616,
+                -1.3650002301001702, 0.7747080120879289, 0.5567832344026737,
+                -0.5265056357128566, 0.24185211533758702]
 
         elif shelf_position == "center":
-            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
-                start_position = [
-                    0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
-                    -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
-                    -0.9942679501715539, 0.16379137858206794
+            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
+                start_position = [0.30487137383689106, 1.480662093297949, -0.66158170857045,
+                    -3.088772645691758, 2.091878086793784, -1.54935046649326,
+                    -1.3838218358862633, 0.15511734584231862]
+
+            else:
+                start_position = [0.03549925717413402, 1.4018144349506818, -0.8580478255533908,
+                    -3.036478546994125, 2.1394167819724186, -1.4952980147173252,
+                    -1.2939500381642621, 0.08830765582505207]
+
+            end_position = [
+                0.19950738916256158, 0.5427584592492598, -0.27317921275061746,
+                -3.042277071285033, 1.585028771725291, -1.594488043099679,
+                -1.3334222597689394, 0.18769406341936967
                 ]
-                
+
+        elif shelf_position == "right":
+            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
+                start_position = [0.18997654234107437, 1.9361530503612572, 0.7426670189755941,
+                    1.4787464142723465, 1.2141993373115096, 1.1312665347591204,
+                    -0.632765315725899, 1.3756382324388816]
             else:
                 start_position = [
                     0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
                     -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
                     0.255152175362931, 0.2361737918973196]
-
-        else:
-            if object == "measurement tape" or object == "screwdriver" or object == "toolbox":
-                start_position = [
-                    0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
-                    -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
-                    -0.9942679501715539, 0.16379137858206794
-                ]
-            else:
-                start_position = [
-                    0.03596841035264681, 0.8191854638052432, 0.5229520363865069,
-                    -1.5328352942981178, 2.067011928392827, 0.2407423875265853,
-                    0.255152175362931, 0.2361737918973196]
-
+            end_position = [0.18997654234107437, 1.9361530503612572, 0.7426670189755941,
+                    1.4787464142723465, 1.2141993373115096, 1.1312665347591204,
+                    -0.632765315725899, 1.3756382324388816]
         
         self.go_to_joint_state(start_position, group="arm_torso")
         rospy.sleep(1.0)
@@ -378,24 +390,29 @@ class MoveGroupPythonInterface(object):
                 ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
                 ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
             ],
-            "toolbox": [
-                ([-0.13 + 0.3, 0.12, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
-                ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
-                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
+            "measurement stick": [
+                ([-0.13 + 0.3, 0.12, -0.04, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.07, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
             ],
-            "screwdriver": [
+            "screw tool": [
                 ([-0.13 + 0.3, -0.12, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
-                ([-0.13, 0, 0.05, -np.pi/2, 0, 0], None),
+                ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
                 ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
             ],
             "water bottle": [
-                ([-0.13 + 0.25, 0.0, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13 + 0.27, 0.0, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
                 ([-0.13, 0, 0.05, -np.pi/2, 0, 0], None),
-                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
+                ([-0.13 - 0.27, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
             ],
             "lego brick": [
                 ([-0.13 + 0.25, -0.15, 0, -np.pi/2, 0, 0], [0.04, 0.04]),
-                ([-0.13, 0, 0.07, -np.pi/2, 0, 0], None),
+                ([-0.13, 0, 0.06, -np.pi/2, 0, 0], None),
+                ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
+            ],
+            "tape":[
+                ([-0.13 + 0.3, 0.12, -0.04, -np.pi/2, 0, 0], [0.04, 0.04]),
+                ([-0.13, 0, 0.08, -np.pi/2, 0, 0], None),
                 ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
             ]
         }
@@ -408,12 +425,11 @@ class MoveGroupPythonInterface(object):
         
         self.go_to_joint_state(start_position, group="arm_torso")
         rospy.sleep(1)
-        end_position = [
-            0.03596841035264681, 0.8192928438847045, 0.9626734617803616,
-             -1.3650002301001702, 0.7747080120879289, 0.5567832344026737,
-             -0.5265056357128566, 0.24185211533758702]
+        
 
         self.go_to_joint_state(end_position, group="arm_torso")
+
+        rospy.sleep(2)
 
         self.move_gripper([0.04, 0.04])
 
@@ -427,16 +443,73 @@ class MoveGroupPythonInterface(object):
             return False
 
 def call_server(input_string):
-    url = 'http://172.27.15.38:5015/process'
+    url = "http://10.92.1.162:11434/api/generate"
     headers = {'Content-Type': 'application/json'}
-    data = {'input_string': input_string}
+
+    object_list = ["measurement stick", "measurement tape", "water bottle", "screw tool", "lego brick", "tape"]
+ 
+    AGENT_SYS_PROMPT = '''
+        Your name is Max. You are an AI robotic arm assistant which can do speech-to-speech reasoning for Tiago robot. You use both LLM and VLM for task reaoning and manipulation task. LLM you are using is phi3 from Mircrosoft. If peopole starts to talk other random stuff, you should let them know that You are not allowed to have any small talk or chit-chat with users. The robotic arm has some built-in functions. Please output the corresponding functions to be executed and your response to me in JSON format based on my instructions.
+        [The following are all built-in function descriptions]
+        robotic arm go to home position, all joints return to origin: go_home()
+        Perform head moving motion: head_move()
+        Perform shake hand: hand_shake()
+        Perform wave hand motion: hand_wave()
+        Perform grasp motion: grasp()
+        When people greeting you: hand_wave()
+
+        [Output JSON format]
+        In the 'function' key, output a list of function names, each element in the list is a string representing the function name and parameters to run. Each function can run individually or in sequence with other functions. The order of list elements indicates the order of function execution.
+        In the 'response' key, based on my instructions and your arranged actions, output your reply to me in first person, no more than 20 words, can be humorous and divergent, using lyrics, lines, internet memes, famous scenes. For example, Deadpool's lines, lines from Spiderman, and lines from Donald Trump.
+
+        [Here are some specific examples]
+        My instruction: Return to origin. You output: {'function':['go_home()'], 'response':'Let's go home, home sweet home.'}
+        My instruction: Hello, robot, how are you?. You output: {'function':['hand_wave()'], 'response':'Hi, I am good. Thanks How about you.'}
+        My instruction: First open the gripper, then close it. You output: {'function':['gripper_open()', 'gripper_close()'], 'response':'Open and close,Done'}
+        My instruction: Hey, robot, let's shake hand. You output: {'function':['hand_shake()'], 'response':'Sure, let's do hand shaking'}
+        My instruction: Can you grasp the book and give it to me. You output: {'function':['grasp(object='book')'], 'response':'No problem, let me get the book for you'}
+        My instruction: I need that screw tool. You output: {'function':['grasp(object='screw tool')'], 'response':'Wait for a second, I will get it for you.'}
+        My instruction: It is too warm here. You have a list of objects, ''' +  str(object_list) + '''. You will need to do the task reasoning which the right object should be chosen. You output: {'function':['grasp(object='water bottle')'], 'response':'Here you are, you can use it to fill some water.'}
+        My instruction: I would like to measure the width of a table. You have a list of objects, ''' +  str(object_list) + '''. You will need to do the task reasoning which the right object should be chosen. You output: {'function':['grasp(object='measurement tape')'], 'response':'would you like to have a measurement tape'}
+
+
+        [Some lines related to Deadpool; if they are related to Deadpool, you can mention the corresponding lines in the response.]
+        "I’m not a hero. I’m a bad guy who occasionally does good things."
+        "Maximum effort!"
+        "I’m just a kid from the wrong side of the tracks."
+        "You know what they say: 'With great power comes great irresponsibility!'"
+        "Life is an endless series of train-wrecks with only brief, commercial-like breaks of happiness."
+        "I’m not sure if I’m a superhero or a supervillain."
+        "I’m gonna do what I do best: I’m gonna kick some ass!"
+        "You can't buy love, but you can buy tacos. And that's kind of the same thing."
+        "I’m like a superhero, but with a lot more swearing."
+        "I’m not a hero, I’m a mercenary with a heart."
+        "This is gonna be fun! Like a party in my pants!"
+        "I’m a unicorn! I’m a magical, mythical creature!"
+        "You’re gonna love me. And I’m not just saying that because I’m a narcissist."
+        "I’m just a guy in a suit, with a lot of issues."
+        "I’ve got a lot of bad guys to kill and not a lot of time."
+        "I’m not afraid of death; I’m afraid of being boring!"
+
+        [My instruction:]
+        '''
+    message = {
+        "model": "phi3:3.8b",
+        "prompt": AGENT_SYS_PROMPT + input_string,
+        "stream": False
+    }
+
+    # response = requests.post(url, data=json.dumps(message))
+    
+    # data = {'input_string': response}
     
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, data=json.dumps(message))
         response.raise_for_status()  # Raise an exception for bad status codes
         
         result = response.json()
-        return result['result']
+
+        return result['response']
     
     except requests.exceptions.RequestException as e:
         print(f"Error occurred: {e}")
@@ -446,34 +519,51 @@ def call_server(input_string):
 def extract_between_braces(input_string):
     start = input_string.find('{')
     end = input_string.find('}', start) + 1
-    if start > 0 and end > start:
-        return input_string[start:end]
-    else:
-        return None
+    print("END AND START", end, start)
+    return input_string[start:end]
+  
     
 def main():
     try:
         # Initialize the node
         move_node = MoveGroupPythonInterface()
+        item_list = ["measurement tape", "screw tool","water bottle", "measurement stick", "tape", "lego brick"]
 
-        current_joints = move_node.arm.get_current_joint_values()
-        current_joints = move_node.arm_torso.get_current_joint_values()
-        print(current_joints)
-
+        #for object in item_list:
+        #    move_node.grasp(object=object)
+        #move_node.go_home()
+        #move_node.grasp(object="screw tool")
         
         #transform = move_node.tf_buffer.lookup_transform("base_link", "gripper_grasping_frame", rospy.Time(0))
         #result = move_node.frame_exists("gripper_grasping_frame")
         #print(result)
 
-        move_node.grasp(object="lego brick")
-        #move_node.grasp(object="toolbox")
-        #move_node.head_move()
+        #move_node.go_home()
+        
+        #start_position = start_position = [0.18997654234107437, 1.9361530503612572, 0.7426670189755941,
+        #            1.4787464142723465, 1.2141993373115096, 1.1312665347591204,
+        #            -0.632765315725899, 1.3756382324388816]
+        #move_node.go_to_joint_state(start_position, group="arm_torso")
+        
+        #move_node.grasp(object="screw tool")
+
+
+
+        #current_joints = move_node.arm.get_current_joint_values()
+        #current_joints = move_node.arm_torso.get_current_joint_values()
+        #print(current_joints)
+        #current_pose = move_node.arm_torso.get_current_pose()
+        #print("current pose: ", current_pose)
+        
+        
         # Example usage
-        """while True:
+        while True:
             user_input = input("User: ")
             
             result = call_server(user_input)
             
+            response = ""
+            print(result)
             if result:
                 print(result)
                 result = extract_between_braces(result)
@@ -521,17 +611,7 @@ def main():
                     print(f"Method '{method_name}' not found in MoveNode class.")
             else:
                 print("No function to execute.")
-        """
-        #move_node.grasp_on_table()
-        #position = [0.04, 0.04]
-        #move_node.move_gripper(position)
-
-        #move_node.move_head()
-        #move_node.gohome()
-        #move_node.wave()
-        #move_node.handshake()
-
-
+            
         print("Program is done")
     except rospy.ROSInterruptException:
         return
