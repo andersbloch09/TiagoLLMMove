@@ -23,13 +23,7 @@ import json
 import ast
 from actionlib import SimpleActionClient
 from pal_interaction_msgs.msg import TtsAction, TtsGoal
-import argparse
-import queue
-import sys
-import sounddevice as sd
-from vosk import Model, KaldiRecognizer
-
-
+from vosk_class import STT_vosk
 
 
 
@@ -197,9 +191,9 @@ class MoveGroupPythonInterface(object):
 
     def go_home(self, gripper_position = [0.04, 0.04]):
         self.move_gripper(gripper_position)
-        homeJoints = [0.20001658562027336, -1.3399542821641688, -0.1999877279909187, 
-                    1.9400579944469158, -1.5699072941908805, 1.3699524984623137, -0.00011856858080827593]    
-        joint_goal = self.arm.get_current_joint_values()
+        homeJoints = [0.050075064508562, 0.19791500406510298, -1.3473788476583473, 
+                     -0.19325346300756263, 1.9444145576707728, -1.5691551247563786, 1.3695652979406119, -0.0003056846223961074]
+        joint_goal = self.arm_torso.get_current_joint_values()
     
         joint_goal[0] = homeJoints[0]
         joint_goal[1] = homeJoints[1]
@@ -208,16 +202,17 @@ class MoveGroupPythonInterface(object):
         joint_goal[4] = homeJoints[4]
         joint_goal[5] = homeJoints[5]
         joint_goal[6] = homeJoints[6]
+        joint_goal[7] = homeJoints[7]
 
         # The go command can be called with joint values, poses, or without any
         # parameters if you have already set the pose or joint target for the group
-        success = self.arm.go(joint_goal, wait=True)
+        success = self.arm_torso.go(joint_goal, wait=True)
 
         # Calling ``stop()`` ensures that there is no residual movement
-        self.arm.stop()
+        self.arm_torso.stop()
 
         # For testing:
-        current_joints = self.arm.get_current_joint_values()
+        current_joints = self.arm_torso.get_current_joint_values()
         return all_close(joint_goal, current_joints, 0.01), success
 
 
@@ -329,11 +324,19 @@ class MoveGroupPythonInterface(object):
             rate.sleep()
             head_pub.publish(trajectory_up)
             rate.sleep()
+        
+        point = JointTrajectoryPoint()
+        point.positions = [0, 0]
+        point.time_from_start = rospy.Duration(1)
+
+        trajectory.points.append(point)
+
+        head_pub.publish(trajectory)
 
     def grasp(self, object="cup", shelf_position = "left"):
 
         if shelf_position == "left":
-            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
+            if object == "measurement tape" or object == "screw tool" or object == "banana":
                 start_position = [
                     0.20001563843928377, 1.0495157342496433, 0.06526745769991871,
                     -2.5513353479881573, 1.8065538756538682, 0.19662746492963695,
@@ -350,7 +353,7 @@ class MoveGroupPythonInterface(object):
                 -0.5265056357128566, 0.24185211533758702]
 
         elif shelf_position == "center":
-            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
+            if object == "measurement tape" or object == "screw tool" or object == "banana":
                 start_position = [0.30487137383689106, 1.480662093297949, -0.66158170857045,
                     -3.088772645691758, 2.091878086793784, -1.54935046649326,
                     -1.3838218358862633, 0.15511734584231862]
@@ -367,7 +370,7 @@ class MoveGroupPythonInterface(object):
                 ]
 
         elif shelf_position == "right":
-            if object == "measurement tape" or object == "screw tool" or object == "measurement stick":
+            if object == "measurement tape" or object == "screw tool" or object == "banana":
                 start_position = [0.18997654234107437, 1.9361530503612572, 0.7426670189755941,
                     1.4787464142723465, 1.2141993373115096, 1.1312665347591204,
                     -0.632765315725899, 1.3756382324388816]
@@ -390,7 +393,7 @@ class MoveGroupPythonInterface(object):
                 ([-0.13, 0, 0.04, -np.pi/2, 0, 0], None),
                 ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.02, 0.02])
             ],
-            "measurement stick": [
+            "banana": [
                 ([-0.13 + 0.3, 0.12, -0.04, -np.pi/2, 0, 0], [0.04, 0.04]),
                 ([-0.13, 0, 0.07, -np.pi/2, 0, 0], None),
                 ([-0.13 - 0.3, 0, 0, -np.pi/2, 0, 0], [0.001, 0.001])
@@ -446,7 +449,7 @@ def call_server(input_string):
     url = "http://10.92.1.162:11434/api/generate"
     headers = {'Content-Type': 'application/json'}
 
-    object_list = ["measurement stick", "measurement tape", "water bottle", "screw tool", "lego brick", "tape"]
+    object_list = ["banana", "measurement tape", "water bottle", "screw tool", "lego brick", "tape"]
  
     AGENT_SYS_PROMPT = '''
         Your name is Max. You are an AI robotic arm assistant which can do speech-to-speech reasoning for Tiago robot. You use both LLM and VLM for task reaoning and manipulation task. LLM you are using is phi3 from Mircrosoft. If peopole starts to talk other random stuff, you should let them know that You are not allowed to have any small talk or chit-chat with users. The robotic arm has some built-in functions. Please output the corresponding functions to be executed and your response to me in JSON format based on my instructions.
@@ -471,6 +474,8 @@ def call_server(input_string):
         My instruction: I need that screw tool. You output: {'function':['grasp(object='screw tool')'], 'response':'Wait for a second, I will get it for you.'}
         My instruction: It is too warm here. You have a list of objects, ''' +  str(object_list) + '''. You will need to do the task reasoning which the right object should be chosen. You output: {'function':['grasp(object='water bottle')'], 'response':'Here you are, you can use it to fill some water.'}
         My instruction: I would like to measure the width of a table. You have a list of objects, ''' +  str(object_list) + '''. You will need to do the task reasoning which the right object should be chosen. You output: {'function':['grasp(object='measurement tape')'], 'response':'would you like to have a measurement tape'}
+        My instruction: I am feeling hungry. You have a list of objects, ''' +  str(object_list) + '''. You will need to do the task reasoning which the right object should be chosen. You output: {'function':['grasp(object='banana')'], 'response':'would you like to have a banana'}
+
 
 
         [Some lines related to Deadpool; if they are related to Deadpool, you can mention the corresponding lines in the response.]
@@ -527,7 +532,8 @@ def main():
     try:
         # Initialize the node
         move_node = MoveGroupPythonInterface()
-        item_list = ["measurement tape", "screw tool","water bottle", "measurement stick", "tape", "lego brick"]
+        item_list = ["measurement tape", "screw tool","water bottle", "banana", "tape", "lego brick"]
+        stt = STT_vosk()
 
         #for object in item_list:
         #    move_node.grasp(object=object)
@@ -547,72 +553,90 @@ def main():
         
         #move_node.grasp(object="screw tool")
 
-
+        #move_node.grasp(object="measurement tape", shelf_position="left")
+        #move_node.go_home()
 
         #current_joints = move_node.arm.get_current_joint_values()
         #current_joints = move_node.arm_torso.get_current_joint_values()
         #print(current_joints)
         #current_pose = move_node.arm_torso.get_current_pose()
         #print("current pose: ", current_pose)
-        
-        
+        speech = False
         # Example usage
         while True:
-            user_input = input("User: ")
-            
-            result = call_server(user_input)
-            
-            response = ""
-            print(result)
-            if result:
-                print(result)
-                result = extract_between_braces(result)
-                result = ast.literal_eval(result)
-                print(result["function"])
-                print(result["response"])
-                response = result["response"]
-
-            client = SimpleActionClient('/tts', TtsAction)
-            client.wait_for_server()
-            # Create a goal to say our sentence
-            goal = TtsGoal()
-            goal.rawtext.text = response
-            goal.rawtext.lang_id = "en_GB"
-            # Send the goal and wait
-            client.send_goal(goal)
-            #client.send_goal(goal)
-
-            # Ensure 'function' key exists and contains a callable function in the list
-            function_call = result["function"]
-            print("This is the output of the function call  : ", function_call)
-            if function_call:
-                # Get the method name from the response (e.g., 'hand_wave()')
-
-                method_name = function_call[0][0:function_call[0].find('(')]
-
-                print("THIS IS THE METHOD NAME : ", method_name)
-
-                sep = "'"
-                temp = function_call[0]
+            if speech == False: 
+                text = stt.speech_to_text_vosk()
+                print("Text from TTS  :", text)
                 
-                if method_name == "grasp": 
-                    arg = temp[temp.find(sep)+len(sep):temp.rfind(sep)]
-                    print("THIS IS ARG : ", arg)
+            if text == "hello max" or speech == True:
+                if text == "hello max":
+                    client = SimpleActionClient('/tts', TtsAction)
+                    client.wait_for_server()
+                    # Create a goal to say our sentence
+                    goal = TtsGoal()
+                    goal.rawtext.text = "Hello what can I do for you?"
+                    goal.rawtext.lang_id = "en_GB"
+                    client.send_goal(goal)
 
-                # Use hasattr to check if the method exists in the move_node object
-                if hasattr(move_node, method_name):  # Check if the method exists
-                    method = getattr(move_node, method_name)  # Get the method dynamically
-                    if method_name == "grasp": 
-                        method(arg)  # Call the method
-                    else: 
-                        method()
+                speech = True 
+                text = stt.speech_to_text_vosk()
+                if text == "thank you":
+                    speech = False
 
-                else:
-                    print(f"Method '{method_name}' not found in MoveNode class.")
-            else:
-                print("No function to execute.")
             
-        print("Program is done")
+                print("Text from TTS  :", text)
+                result = call_server(text)
+                
+                response = ""
+                if result:
+                    result = extract_between_braces(result)
+                    result = ast.literal_eval(result)
+                    print(result["function"])
+                    print(result["response"])
+                    response = result["response"]
+
+                client = SimpleActionClient('/tts', TtsAction)
+                client.wait_for_server()
+                # Create a goal to say our sentence
+                goal = TtsGoal()
+                goal.rawtext.text = response
+                goal.rawtext.lang_id = "en_GB"
+                # Send the goal and wait
+                client.send_goal(goal)
+                #client.send_goal(goal)
+
+                # Ensure 'function' key exists and contains a callable function in the list
+                function_call = result["function"]
+                print("This is the output of the function call  : ", function_call)
+                if function_call:
+                    # Get the method name from the response (e.g., 'hand_wave()')
+
+                    method_name = function_call[0][0:function_call[0].find('(')]
+
+                    print("THIS IS THE METHOD NAME : ", method_name)
+
+                    sep = "'"
+                    temp = function_call[0]
+                    
+                    if method_name == "grasp": 
+                        arg = temp[temp.find(sep)+len(sep):temp.rfind(sep)]
+                        print("THIS IS ARG : ", arg)
+
+                    # Use hasattr to check if the method exists in the move_node object
+                    if hasattr(move_node, method_name):  # Check if the method exists
+                        method = getattr(move_node, method_name)  # Get the method dynamically
+                        if method_name == "grasp": 
+                            method(arg)  # Call the method
+                        else: 
+                            method()
+
+                    else:
+                        print(f"Method '{method_name}' not found in MoveNode class.")
+                else:
+                    print("No function to execute.")
+                
+            print("Program is done")
+            
     except rospy.ROSInterruptException:
         return
     except KeyboardInterrupt:
