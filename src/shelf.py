@@ -98,7 +98,7 @@ class MoveGroupPythonInterface(object):
 
             # We get the joint values from the group and change some of the values:
             joint_goal = group.get_current_joint_values()
-            print(joint_goal)
+            #print(joint_goal)
             joint_goal[0] = joints[0]
             joint_goal[1] = joints[1]
             joint_goal[2] = joints[2]
@@ -191,7 +191,7 @@ class MoveGroupPythonInterface(object):
 
     def go_home(self, gripper_position = [0.04, 0.04]):
         self.move_gripper(gripper_position)
-        homeJoints = [0.050075064508562, 0.19791500406510298, -1.3473788476583473, 
+        homeJoints = [0.060075064508562, 0.19791500406510298, -1.3473788476583473, 
                      -0.19325346300756263, 1.9444145576707728, -1.5691551247563786, 1.3695652979406119, -0.0003056846223961074]
         joint_goal = self.arm_torso.get_current_joint_values()
     
@@ -564,26 +564,28 @@ def main():
         speech = False
         # Example usage
         while True:
-            if speech == False: 
-                text = stt.speech_to_text_vosk()
-                print("Text from TTS  :", text)
+            #if speech == False: 
+            #    text = stt.speech_to_text_vosk()
+            #    print("Text from TTS  :", text)
                 
-            if text == "hello max" or speech == True:
-                if text == "hello max":
-                    client = SimpleActionClient('/tts', TtsAction)
-                    client.wait_for_server()
-                    # Create a goal to say our sentence
-                    goal = TtsGoal()
-                    goal.rawtext.text = "Hello what can I do for you?"
-                    goal.rawtext.lang_id = "en_GB"
-                    client.send_goal(goal)
+            #if text == "hello max" or speech == True:
+            #    if text == "hello max":
+            #        client = SimpleActionClient('/tts', TtsAction)
+            #        client.wait_for_server()
+            #        goal = TtsGoal()
+            #        goal.rawtext.text = "Hello what can I do for you?"
+            #        goal.rawtext.lang_id = "en_GB"
+            #        client.send_goal(goal)
 
-                speech = True 
-                text = stt.speech_to_text_vosk()
-                if text == "thank you":
-                    speech = False
+            #    speech = True 
+            #    
+            #    text = stt.speech_to_text_vosk()
+            #    if text == "thank you":
+            #        speech = False
+            text = ""
+            text = stt.speech_to_text_vosk()
 
-            
+            if text:
                 print("Text from TTS  :", text)
                 result = call_server(text)
                 
