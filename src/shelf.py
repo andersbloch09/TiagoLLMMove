@@ -180,9 +180,9 @@ class MoveGroupPythonInterface(object):
         transformed_pose_stamped = self.tf_buffer.transform(wpose, "base_footprint")
         waypoints.append(transformed_pose_stamped.pose)
 
-       
+
         (plan, fraction) = self.arm.compute_cartesian_path(
-            waypoints, 0.01, 0.0, avoid_collisions = avoidCollision  # waypoints to follow  # eef_step
+            waypoints, eef_step=0.01, avoid_collisions = avoidCollision  # waypoints to follow  # eef_step
         )  # jump_threshold
 
         # Note: We are just planning, not asking arm to actually move the robot yet:
@@ -564,7 +564,7 @@ def main():
         # Initialize the node
         move_node = MoveGroupPythonInterface()
         item_list = ["measurement tape", "screw tool","water bottle", "banana", "tape", "lego brick"]
-        stt = STT_vosk()
+        #stt = STT_vosk()
 
         #for object in item_list:
         #    move_node.grasp(object=object)
